@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="si">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f1f2f6; margin: 0; padding: 20px; color: #333; }
+        .admin-header { background-color: #2c3e50; color: white; padding: 20px; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; }
+        .stat-box h3 { margin: 0; font-size: 14px; opacity: 0.8; }
+        .stat-box h1 { margin: 5px 0 0; font-size: 32px; }
+        
+        /* --- Settings Icon Animation Added Here --- */
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .settings-icon { 
+            position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; 
+            animation: spin 3s linear infinite; /* Continuous Spin */
+        }
+        .settings-icon:hover { color: #3498db; }
+        /* ------------------------------------------ */
+
+        .control-panel { background-color: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
+        .panel-title { font-weight: bold; margin-bottom: 15px; font-size: 18px; border-bottom: 2px solid #f1f2f6; padding-bottom: 10px; }
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        input { padding: 12px; border: 1px solid #dfe6e9; border-radius: 8px; flex: 1; outline: none; font-size: 16px; }
+        button { padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; color: white; }
+        .btn-check { background-color: #3498db; }
+        .btn-add { background-color: #2ecc71; }
+        .btn-deduct { background-color: #e74c3c; }
+        .list-container { background-color: white; padding: 20px; border-radius: 15px; }
+        .user-card { display: flex; justify-content: space-between; align-items: center; background: white; border: 1px solid #eee; padding: 15px; margin-bottom: 10px; border-radius: 12px; cursor: pointer; transition: 0.2s; }
+        .user-card:hover { transform: translateY(-2px); border-color: #3498db; }
+        .user-avatar { width: 40px; height: 40px; background-color: #ecf0f1; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: #7f8c8d; }
+        .user-avatar.approved-red { background-color: #e74c3c; color: white; }
+        .user-details h4 { margin: 0; color: #2c3e50; font-size: 16px; }
+        .user-details p { margin: 2px 0 0; color: #95a5a6; font-size: 12px; }
+        .balance-badge { background-color: #27ae60; color: white; padding: 5px 12px; border-radius: 20px; font-weight: bold; font-size: 14px; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 15px; width: 90%; max-width: 400px; text-align: center; position: relative; }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 20px; cursor: pointer; color: #999; }
+        .req-details { background: #f8f9fa; padding: 15px; border-radius: 10px; margin: 15px 0; text-align: left; }
+        .req-row { margin-bottom: 5px; font-size: 14px; }
+        .req-val { font-weight: bold; color: #2c3e50; }
+        .action-btns { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-approve { flex: 1; background: #27ae60; }
+        .btn-reject { flex: 1; background: #c0392b; }
+        .history-list { text-align: left; max-height: 200px; overflow-y: auto; }
+        .history-item { padding: 5px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="admin-header">
+        <div class="stat-box"><h3>Total Users</h3><h1 id="total-users-count">...</h1></div>
+        <i class="fas fa-cog settings-icon" onclick="checkForPendingRequests()"></i>
+    </div>
+    <div class="control-panel">
+        <div class="panel-title">Manage Balance</div>
+        <div class="input-group"><input type="number" id="target-userid" placeholder="User ID"><button class="btn-check" onclick="checkUserBalance()">Check</button></div>
+        <div id="balance-info" style="display:none; margin-bottom:10px; font-weight:bold;">Bal: <span id="current-balance" style="color:#e74c3c">0</span> Re</div>
+        <div class="input-group"><input type="number" id="amount-input" placeholder="Amount"><button class="btn-add" onclick="updateBalance('add')">Add</button><button class="btn-deduct" onclick="updateBalance('deduct')">Deduct</button></div>
+    </div>
+    <div class="list-container"><div class="panel-title">All Users</div><div id="users-list-area">Loading...</div></div>
+    <div id="verify-modal" class="modal-overlay">
+        <div class="modal-content">
+            <i class="fas fa-times close-btn" onclick="closeVerifyModal()"></i>
+            <h3>Pending Request Found</h3>
+            <div id="pending-req-area" style="display:block;">
+                <div class="req-details">
+                    <div class="req-row">User ID: <span class="req-val" id="req-uid">--</span></div>
+                    <div class="req-row">Player ID: <span class="req-val" id="req-playerid" style="font-size:18px; color:#2980b9;">--</span></div>
+                    <div class="req-row">Status: <span class="req-val" style="color:#f39c12">Pending</span></div>
+                </div>
+                <div class="action-btns"><button class="btn-reject" onclick="processRequest('reject')">Reject</button><button class="btn-approve" onclick="processRequest('approve')">Approve (+1000)</button></div>
+            </div>
+        </div>
+    </div>
+    <div id="history-modal" class="modal-overlay">
+        <div class="modal-content">
+            <i class="fas fa-times close-btn" onclick="document.getElementById('history-modal').style.display='none'"></i>
+            <h3>Approved IDs</h3>
+            <p style="font-size:12px; color:#7f8c8d;">User: <span id="hist-uid"></span></p>
+            <div id="history-list-div" class="history-list"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getDatabase, ref, set, get, update, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+        const firebaseConfig = { apiKey: "AIzaSyDA_sTGHrElJJJuaUXcl1TP2MjO8uGheeI", authDomain: "meke-60f89.firebaseapp.com", databaseURL: "https://meke-60f89-default-rtdb.firebaseio.com", projectId: "meke-60f89", storageBucket: "meke-60f89.firebasestorage.app", messagingSenderId: "826415258845", appId: "1:826415258845:web:72876db3c6dfe88bf68f34", measurementId: "G-LE2HL2YY2H" };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        let allUsers = {}, allBalances = {}, approvedList = {};
+        onValue(ref(db, 'users'), snap => { allUsers = snap.val() || {}; renderList(); });
+        onValue(ref(db, 'balances'), snap => { allBalances = snap.val() || {}; renderList(); });
+        onValue(ref(db, 'approved_ids'), snap => { approvedList = snap.val() || {}; renderList(); });
+
+        function renderList() {
+            const list = document.getElementById('users-list-area');
+            let uids = Object.keys(allUsers);
+            
+            // --- UPDATED: Sort Users by Balance (Descending) ---
+            uids.sort((a, b) => {
+                let balA = allBalances[a] || 0;
+                let balB = allBalances[b] || 0;
+                return balB - balA; // Highest balance first
+            });
+            // ---------------------------------------------------
+
+            document.getElementById('total-users-count').innerText = uids.length;
+            list.innerHTML = "";
+            uids.forEach(uid => {
+                const bal = allBalances[uid] || 0;
+                const hasApprovedIds = approvedList[uid] ? true : false;
+                const iconClass = hasApprovedIds ? "user-avatar approved-red" : "user-avatar";
+                const iconClick = hasApprovedIds ? `onclick="showHistory('${uid}')"` : "";
+                const div = document.createElement('div');
+                div.className = "user-card";
+                div.innerHTML = `<div class="card-left" style="display:flex; align-items:center; gap:15px;"><div class="${iconClass}" ${iconClick} title="Click to view IDs"><i class="fas fa-user"></i></div><div class="user-details" onclick="fillInput('${uid}')"><h4>ID: ${uid}</h4><p>Joined: ${new Date(allUsers[uid].joinedAt).toLocaleDateString()}</p></div></div><div class="balance-badge">${bal} Re</div>`;
+                list.appendChild(div);
+            });
+        }
+
+        window.fillInput = (uid) => { document.getElementById('target-userid').value = uid; checkUserBalance(); };
+
+        window.checkForPendingRequests = async function() {
+            // --- UPDATED: Show System Checking Message ---
+            alert("System Checking...");
+            // ---------------------------------------------
+
+            const snapshot = await get(ref(db, 'checks'));
+            if(!snapshot.exists()) { alert("No pending requests found."); return; }
+            const allChecks = snapshot.val();
+            let pendingUser = null, pendingData = null;
+            for (const [uid, data] of Object.entries(allChecks)) { if (data.status === 'pending') { pendingUser = uid; pendingData = data; break; } }
+            if (pendingUser) {
+                document.getElementById('verify-modal').style.display = 'flex';
+                document.getElementById('req-uid').innerText = pendingUser;
+                document.getElementById('req-playerid').innerText = pendingData.playerId;
+            } else { alert("No pending requests found."); }
+        };
+
+        window.closeVerifyModal = () => { document.getElementById('verify-modal').style.display = 'none'; };
+        
+        window.processRequest = async function(action) {
+            const uid = document.getElementById('req-uid').innerText;
+            const pid = document.getElementById('req-playerid').innerText;
+            
+            if(action === 'approve') {
+                const currentBal = allBalances[uid] || 0;
+                await set(ref(db, 'balances/' + uid), currentBal + 1000);
+                await push(ref(db, 'approved_ids/' + uid), { playerId: pid, approvedAt: Date.now() });
+                await set(ref(db, 'used_player_ids/' + pid), true);
+                await update(ref(db, 'checks/' + uid), { status: 'approved' });
+                alert("Approved! Added 1000 Re.");
+            } else {
+                await update(ref(db, 'checks/' + uid), { status: 'rejected' });
+                alert("Rejected.");
+            }
+            closeVerifyModal();
+        };
+
+        window.showHistory = async function(uid) {
+            document.getElementById('history-modal').style.display = 'flex';
+            document.getElementById('hist-uid').innerText = uid;
+            const container = document.getElementById('history-list-div');
+            container.innerHTML = "Loading...";
+            const snap = await get(ref(db, 'approved_ids/' + uid));
+            container.innerHTML = "";
+            if(snap.exists()) {
+                Object.values(snap.val()).forEach(item => {
+                    const div = document.createElement('div');
+                    div.className = "history-item";
+                    div.innerHTML = `<b>${item.playerId}</b> <br> <span style='font-size:10px; color:#999'>${new Date(item.approvedAt).toLocaleString()}</span>`;
+                    container.appendChild(div);
+                });
+            } else { container.innerHTML = "No history found."; }
+        };
+
+        window.checkUserBalance = () => { const uid = document.getElementById('target-userid').value; if(allBalances[uid] !== undefined) { document.getElementById('balance-info').style.display = 'block'; document.getElementById('current-balance').innerText = allBalances[uid]; } else { alert("User not found"); } };
+        window.updateBalance = (type) => { const uid = document.getElementById('target-userid').value; const amount = parseFloat(document.getElementById('amount-input').value); if(!uid || !amount) return; let newBal = (allBalances[uid] || 0) + (type==='add' ? amount : -amount); if(newBal < 0) newBal = 0; set(ref(db, 'balances/' + uid), newBal).then(()=> { alert("Updated!"); document.getElementById('amount-input').value = ""; }); };
+    </script>
+</body>
+</html>
