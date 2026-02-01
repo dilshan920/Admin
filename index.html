@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Panel</title>
+    <title>Admin Panel - Secured</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #f1f2f6; margin: 0; padding: 20px; color: #333; }
@@ -11,14 +11,36 @@
         .stat-box h3 { margin: 0; font-size: 14px; opacity: 0.8; }
         .stat-box h1 { margin: 5px 0 0; font-size: 32px; }
         
-        /* --- Settings Icon Animation Added Here --- */
+        /* --- Settings Icon Animation --- */
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .settings-icon { 
             position: absolute; top: 15px; right: 15px; font-size: 24px; cursor: pointer; 
-            animation: spin 3s linear infinite; /* Continuous Spin */
+            animation: spin 3s linear infinite; 
         }
         .settings-icon:hover { color: #3498db; }
-        /* ------------------------------------------ */
+
+        /* --- LOGIN OVERLAY STYLES (NEW) --- */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #2c3e50; /* Dark background */
+            z-index: 9999;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .login-box {
+            background: white; padding: 40px; border-radius: 15px; width: 300px;
+            text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+        .login-input {
+            width: 100%; padding: 12px; margin-bottom: 15px;
+            border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px;
+        }
+        .login-btn {
+            width: 100%; padding: 12px; background: #27ae60; color: white;
+            border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px;
+        }
+        .login-btn:hover { background: #2ecc71; }
+        .error-msg { color: #e74c3c; font-size: 13px; margin-top: 10px; display: none; }
+        /* ---------------------------------- */
 
         .control-panel { background-color: white; padding: 20px; border-radius: 15px; margin-bottom: 20px; }
         .panel-title { font-weight: bold; margin-bottom: 15px; font-size: 18px; border-bottom: 2px solid #f1f2f6; padding-bottom: 10px; }
@@ -50,6 +72,20 @@
     </style>
 </head>
 <body>
+
+    <!-- SECURE LOGIN SCREEN -->
+    <div id="login-overlay">
+        <div class="login-box">
+            <h2 style="margin-top:0; color:#333;">Admin Login</h2>
+            <p style="font-size:12px; color:#777; margin-bottom:20px;">Please sign in to access control panel.</p>
+            <input type="email" id="admin-email" class="login-input" placeholder="Email Address">
+            <input type="password" id="admin-pass" class="login-input" placeholder="Password">
+            <button class="login-btn" onclick="performLogin()">Login</button>
+            <p id="login-error" class="error-msg">Invalid Email or Password!</p>
+        </div>
+    </div>
+
+    <!-- MAIN ADMIN CONTENT -->
     <div class="admin-header">
         <div class="stat-box"><h3>Total Users</h3><h1 id="total-users-count">...</h1></div>
         <i class="fas fa-cog settings-icon" onclick="checkForPendingRequests()"></i>
@@ -61,6 +97,7 @@
         <div class="input-group"><input type="number" id="amount-input" placeholder="Amount"><button class="btn-add" onclick="updateBalance('add')">Add</button><button class="btn-deduct" onclick="updateBalance('deduct')">Deduct</button></div>
     </div>
     <div class="list-container"><div class="panel-title">All Users</div><div id="users-list-area">Loading...</div></div>
+    
     <div id="verify-modal" class="modal-overlay">
         <div class="modal-content">
             <i class="fas fa-times close-btn" onclick="closeVerifyModal()"></i>
@@ -87,27 +124,63 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getDatabase, ref, set, get, update, onValue, push } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+        // Import Auth functions
+        import { getAuth, signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
-        const firebaseConfig = { apiKey: "AIzaSyDA_sTGHrElJJJuaUXcl1TP2MjO8uGheeI", authDomain: "meke-60f89.firebaseapp.com", databaseURL: "https://meke-60f89-default-rtdb.firebaseio.com", projectId: "meke-60f89", storageBucket: "meke-60f89.firebasestorage.app", messagingSenderId: "826415258845", appId: "1:826415258845:web:72876db3c6dfe88bf68f34", measurementId: "G-LE2HL2YY2H" };
+        const firebaseConfig = {
+          apiKey: "AIzaSyA2sTVjWzycnCr2BEGiZU6-6bbCplT0Tew",
+          authDomain: "ref22-e7d57.firebaseapp.com",
+          databaseURL: "https://ref22-e7d57-default-rtdb.firebaseio.com",
+          projectId: "ref22-e7d57",
+          storageBucket: "ref22-e7d57.firebasestorage.app",
+          messagingSenderId: "1093349921902",
+          appId: "1:1093349921902:web:ef89e2ca9d11e3f00e827f",
+          measurementId: "G-4V3C96RT7X"
+        };
+
         const app = initializeApp(firebaseConfig);
         const db = getDatabase(app);
+        const auth = getAuth(app); // Initialize Auth
 
         let allUsers = {}, allBalances = {}, approvedList = {};
-        onValue(ref(db, 'users'), snap => { allUsers = snap.val() || {}; renderList(); });
-        onValue(ref(db, 'balances'), snap => { allBalances = snap.val() || {}; renderList(); });
-        onValue(ref(db, 'approved_ids'), snap => { approvedList = snap.val() || {}; renderList(); });
+
+        // LOGIN LOGIC
+        window.performLogin = () => {
+            const email = document.getElementById('admin-email').value;
+            const pass = document.getElementById('admin-pass').value;
+            const errorMsg = document.getElementById('login-error');
+
+            signInWithEmailAndPassword(auth, email, pass)
+                .then((userCredential) => {
+                    // Login Success
+                    document.getElementById('login-overlay').style.display = 'none';
+                    initAdminData(); // Load data ONLY after login
+                })
+                .catch((error) => {
+                    // Login Fail
+                    console.error(error);
+                    errorMsg.style.display = 'block';
+                    errorMsg.innerText = "Error: " + error.message;
+                });
+        };
+
+        // Function to start listeners only when logged in
+        function initAdminData() {
+            onValue(ref(db, 'users'), snap => { allUsers = snap.val() || {}; renderList(); });
+            onValue(ref(db, 'balances'), snap => { allBalances = snap.val() || {}; renderList(); });
+            onValue(ref(db, 'approved_ids'), snap => { approvedList = snap.val() || {}; renderList(); });
+        }
 
         function renderList() {
             const list = document.getElementById('users-list-area');
             let uids = Object.keys(allUsers);
             
-            // --- UPDATED: Sort Users by Balance (Descending) ---
+            // Sort Users by Balance (Descending)
             uids.sort((a, b) => {
                 let balA = allBalances[a] || 0;
                 let balB = allBalances[b] || 0;
-                return balB - balA; // Highest balance first
+                return balB - balA; 
             });
-            // ---------------------------------------------------
 
             document.getElementById('total-users-count').innerText = uids.length;
             list.innerHTML = "";
@@ -126,10 +199,7 @@
         window.fillInput = (uid) => { document.getElementById('target-userid').value = uid; checkUserBalance(); };
 
         window.checkForPendingRequests = async function() {
-            // --- UPDATED: Show System Checking Message ---
             alert("System Checking...");
-            // ---------------------------------------------
-
             const snapshot = await get(ref(db, 'checks'));
             if(!snapshot.exists()) { alert("No pending requests found."); return; }
             const allChecks = snapshot.val();
